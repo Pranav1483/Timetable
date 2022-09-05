@@ -1,22 +1,21 @@
-from PyQt5.QtGui import QFont
-from PyQt5.QtWidgets import QMainWindow, QApplication, QLabel, QPushButton, QLineEdit
 import sys
-import webbrowser
-import time
-import pyautogui as pg
-from nltk.tokenize import word_tokenize
+from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import QMainWindow, QLabel, QLineEdit, QPushButton, QApplication
+from selenium import webdriver
+from webdriver_manager.firefox import GeckoDriverManager
+from selenium.webdriver.firefox.options import Options
 import re
 import pandas as pd
+import os
 import numpy as np
 import csv
-import os
-import subprocess
 
 
 class Window(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        self.label_4 = None
         self.w = None
         self.label = None
         self.combo = None
@@ -31,7 +30,7 @@ class Window(QMainWindow):
         self.top = 300
         self.width = 500
         self.height = 310
-        self.title = "TimeTable"
+        self.title = "Login"
         self.GUIComponents()
 
     def GUIComponents(self):
@@ -54,7 +53,7 @@ class Window(QMainWindow):
         self.label_3.setText("Password  :  ")
         self.label_3.move(100, 150)
         self.label_3.setFont(QFont("Times", 10))
-        
+
         self.label_4 = QLineEdit(self)
         self.label_4.move(200, 110)
         self.label_4.resize(150, 30)
@@ -75,110 +74,70 @@ class Window(QMainWindow):
         username = self.label_4.text()
         password = self.textbox.text()
         return self.process(username, password)
-    
+
     def process(self, user, pwd):
-        def clrscr():
-            clear = lambda: os.system("cls")
-            clear()
-        
-        def workflow():
-            url = "https://workflow.iitm.ac.in/"
-            webbrowser.register('firefox', None, webbrowser.BackgroundBrowser("C:/Program Files/Mozilla Firefox/firefox.exe"))
-            webbrowser.get('firefox').open(url)
+        def get_text(user, pwd):
+            options = Options()
+            options.add_argument("--headless")
+            browser = webdriver.Firefox(executable_path=GeckoDriverManager().install(), options=options)
+            browser.get('https://workflow.iitm.ac.in/student')
+            browser.find_element('id', 'txtUserName').send_keys(user)
+            browser.find_element('id', 'txtPassword').send_keys(pwd)
+            browser.find_element('id', 'Login').click()
+            a = browser.find_element('id', 'aspnetForm').text
+            print(a)
+            browser.close()
+            tmp2 = re.search(r'Academic Calander', a)
+            tmp1 = re.search(r'Course No Course Name Slot Category Type', a)
+            txt = a[tmp1.span()[1]:tmp2.span()[0]]
+            tx_list = re.split(r'\s+', txt)
+            return tx_list
 
+        def match(tx_list):
+            tt = {}
+            flag = 0
+            key = val = ''
+            for i in range(len(tx_list) - 1):
+                if flag == 0:
+                    if len(tx_list[i]) == 6 and tx_list[i][:2].isalpha() and tx_list[i][2:].isnumeric():
+                        val = tx_list[i]
+                    elif len(tx_list[i]) == 1 and (
+                            tx_list[i + 1] == "Science" or tx_list[i + 1] == "Professional" or tx_list[
+                        i + 1] == "Engineering" or
+                            tx_list[i + 1] == "Humanities"):
+                        key = tx_list[i]
+                        flag = 1
+                if flag == 1:
+                    tt[key] = val
+                    flag = 0
+            return tt
 
-        def access(username, password):
-            width, height = pg.size()
-            time.sleep(3)
-            pg.click(width/2, height/4)
-            pg.write(username)
-            pg.click(width/2, height/2.9)
-            pg.write(password)
-            pg.click(width/1.8, height/2.4)
+        def make_tt(tt, user):
+            df = pd.read_csv(os.getcwd() + "/Slotwise.csv")
+            arr = df.to_numpy()
 
+            for i in range(1, len(arr)):
+                for j in range(len(arr[0])):
+                    if len(arr[i][j]) == 1 or len(arr[i][j]) == 5:
+                        for x in tt.keys():
+                            if x in arr[i][j]:
+                                arr[i][j] = tt[x]
+                                break
+            for i in range(1, len(arr)):
+                for j in range(len(arr[0])):
+                    if len(arr[i][j]) == 1 or len(arr[i][j]) == 5:
+                        arr[i][j] = ''
+            arr[0][0] = ''
 
-        def portal(username, password):
-            width, height = pg.size()
-            time.sleep(2)
-            pg.click(width/3.5, height/1.78)
-            time.sleep(3)
-            pg.click(width/2, height/2.3)
-            pg.write(username)
-            pg.click(width/2, height/1.76)
-            pg.write(password)
-            pg.click(width/1.8, height/1.5)
+            a = np.array(arr)
+            download_folder = os.getcwd() + '/Results/'
+            with open(download_folder + user.upper() + '.csv', 'w', newline='') as file:
+                mywriter = csv.writer(file, delimiter=',')
+                mywriter.writerows(a)
 
+        make_tt(match(get_text(user, pwd)), user)
+        self.close()
 
-        def copy():
-            time.sleep(4)
-            w, h = pg.size()
-
-            pg.moveTo(w/3.6, h/1.8)
-            pg.dragTo(w/1.35, h/1.1, 0.5, button='left')
-            with pg.hold('ctrl'):
-                pg.press('c')
-            subprocess.Popen("C:/Windows/notepad.exe")
-            time.sleep(1)
-            w, h = pg.size()
-            pg.click(w/4, h/3, button="right")
-            pg.click(w/3.8, h/2.4)
-            with pg.hold('ctrl'):
-                pg.press('s')
-            pg.write("tt")
-            pg.press('enter')
-            pg.press(['left', 'enter'])
-
-
-        clrscr()
-        workflow()
-        access(user, pwd)
-        portal(user, pwd)
-        copy()
-
-        file = open("E:/Code/Python/Testing/tt.txt", 'r')
-        tx = file.read()
-
-        tx_list = word_tokenize(re.sub(r"[^A-Za-z\d]", " ", tx))
-
-        tt = {}
-        flag = 0
-        for i in range(len(tx_list)-1):
-            if flag == 0:    
-                if len(tx_list[i]) == 6 and tx_list[i][:2].isalpha() and tx_list[i][2:].isnumeric():
-                    val = tx_list[i]
-                elif len(tx_list[i]) == 1 and (tx_list[i+1] == "Science" or tx_list[i+1] == "Professional" or tx_list[i+1] == "Engineering"):
-                    key = tx_list[i]
-                    flag = 1
-            if flag == 1:
-                tt[key] = val
-                flag = 0
-
-        df = pd.read_csv("Slotwise.csv")
-        arr = df.to_numpy()
-
-        for i in range(1, len(arr)):
-            for j in range(len(arr[0])):
-                if len(arr[i][j]) == 1 or len(arr[i][j]) == 5:
-                    for x in tt.keys():
-                        if x in arr[i][j]:
-                            arr[i][j] = tt[x]
-                            break
-        for i in range(1, len(arr)):
-            for j in range(len(arr[0])):
-                if len(arr[i][j]) == 1 or len(arr[i][j]) == 5:
-                    arr[i][j] = ''
-        arr[0][0] = ''
-
-
-        a= np.array(arr)
-
-        with open('Timetable_'+user+'.csv', 'w', newline='') as file:
-            mywriter = csv.writer(file, delimiter=',')
-            mywriter.writerows(a)
-
-        os.system("E:/Code/Python/Timetable_"+user+".csv")
-    
-        
 
 app = QApplication(sys.argv)
 w = Window()
